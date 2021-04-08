@@ -22,6 +22,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 
 /* USER CODE END Includes */
 
@@ -78,6 +81,9 @@ static void MX_USB_PCD_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	uint16_t raw;
+	char msg[10];
+	int percentage;
 
   /* USER CODE END 1 */
 
@@ -99,11 +105,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ADC1_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_USB_PCD_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -115,6 +121,23 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  // Test: Set GPIO pin high
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+
+	  HAL_ADC_Start(&hadc1);
+	  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+	  raw = HAL_ADC_GetValue(&hadc1);
+
+	  // Test: Set GPIO pin low
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+
+
+	  percentage = MAP(raw, 1230, 3040, 0, 100);
+	  sprintf(msg, "%hu%%\r\n", percentage);
+
+	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+	  HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -443,7 +466,10 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+int MAP(int input, int input_min, int input_max, int output_min, int output_max)
+{
+	return ((((input - input_min)*(output_max - output_min))/(input_max - input_min)) + output_min);
+}
 /* USER CODE END 4 */
 
 /**
