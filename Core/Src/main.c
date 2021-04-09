@@ -49,6 +49,8 @@ I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
 
+TIM_HandleTypeDef htim1;
+
 UART_HandleTypeDef huart1;
 
 PCD_HandleTypeDef hpcd_USB_FS;
@@ -65,7 +67,12 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USB_PCD_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
+static void Watering_Handler(void);
+static void Watering(void);
+static int MAP(int, int, int, int, int);
+static int Read_From_Sensor(void);
 
 /* USER CODE END PFP */
 
@@ -81,9 +88,22 @@ static void MX_USB_PCD_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	uint16_t raw;
 	char msg[10];
 	int percentage;
+	enum states
+	{
+	    standard,
+	    trouble,
+	};
+	enum signals
+	{
+	    sign0,
+	};
+
+	enum states FSM_table[2][1] = {
+	    [standard][sign0] = trouble,
+	    [trouble][sign0] = standard,
+	};
 
   /* USER CODE END 1 */
 
@@ -105,12 +125,16 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_ADC1_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_USB_PCD_Init();
-  MX_ADC1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim1);
+  enum states current_state = standard;
+  enum signals current_signal = sign0;
 
   /* USER CODE END 2 */
 
@@ -122,22 +146,19 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  // Test: Set GPIO pin high
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+	  percentage = Read_From_Sensor();
 
-	  HAL_ADC_Start(&hadc1);
-	  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	  raw = HAL_ADC_GetValue(&hadc1);
-
-	  // Test: Set GPIO pin low
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
-
-
-	  percentage = MAP(raw, 1230, 3040, 0, 100);
 	  sprintf(msg, "%hu%%\r\n", percentage);
-
 	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
-	  HAL_Delay(1000);
+
+	  current_state = FSM_table[current_state][current_signal];
+
+	  if (percentage < 80) {
+		  Watering_Handler();
+	  }
+
+	  HAL_Delay(2000);
+
   }
   /* USER CODE END 3 */
 }
@@ -181,11 +202,13 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART1
-                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_ADC12;
+                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_TIM1
+                              |RCC_PERIPHCLK_ADC12;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
   PeriphClkInit.USBClockSelection = RCC_USBCLKSOURCE_PLL;
+  PeriphClkInit.Tim1ClockSelection = RCC_TIM1CLK_HCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -342,6 +365,53 @@ static void MX_SPI1_Init(void)
 }
 
 /**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 15999;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 5000;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -429,7 +499,7 @@ static void MX_GPIO_Init(void)
                           |LD6_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2|GPIO_PIN_10, GPIO_PIN_SET);
 
   /*Configure GPIO pins : DRDY_Pin MEMS_INT3_Pin MEMS_INT4_Pin MEMS_INT1_Pin
                            MEMS_INT2_Pin */
@@ -456,6 +526,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PA2 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pin : PA10 */
   GPIO_InitStruct.Pin = GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -466,9 +543,50 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-int MAP(int input, int input_min, int input_max, int output_min, int output_max)
+static int Read_From_Sensor(void){
+	uint16_t raw;
+	int percentage;
+
+	HAL_ADC_Start(&hadc1);
+	HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+	raw = HAL_ADC_GetValue(&hadc1);
+
+	percentage = MAP(raw, 1230, 3040, 0, 100);
+
+	return percentage;
+}
+
+static int MAP(int input, int input_min, int input_max, int output_min, int output_max)
 {
 	return ((((input - input_min)*(output_max - output_min))/(input_max - input_min)) + output_min);
+}
+
+static void Watering_Handler(void){
+	int percentage;
+
+	Watering();
+	HAL_Delay(1500);
+
+	percentage = Read_From_Sensor();
+	if (percentage < 80) {
+		Watering();
+	}
+
+
+}
+
+static void Watering(void) {
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
+
+	HAL_Delay(1500);
+
+	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
+
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
+
 }
 /* USER CODE END 4 */
 
