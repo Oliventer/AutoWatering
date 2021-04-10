@@ -71,14 +71,34 @@ static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 static void Watering_Handler(void);
 static void Watering(void);
+static void Trouble_Watering(void);
 static int MAP(int, int, int, int, int);
 static int Read_From_Sensor(void);
+static void Alarm(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+enum states
+{
+	standard,
+	trouble,
+};
+enum signals
+{
+	sign0,
+};
 
+enum states FSM_table[2][1] = {
+	[standard][sign0] = trouble,
+    [trouble][sign0] = standard,
+};
+
+enum states current_state = standard;
+enum signals current_signal = sign0;
+
+int percentage;
 /* USER CODE END 0 */
 
 /**
@@ -89,21 +109,6 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 	char msg[10];
-	int percentage;
-	enum states
-	{
-	    standard,
-	    trouble,
-	};
-	enum signals
-	{
-	    sign0,
-	};
-
-	enum states FSM_table[2][1] = {
-	    [standard][sign0] = trouble,
-	    [trouble][sign0] = standard,
-	};
 
   /* USER CODE END 1 */
 
@@ -133,9 +138,6 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim1);
-  enum states current_state = standard;
-  enum signals current_signal = sign0;
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -149,15 +151,13 @@ int main(void)
 	  percentage = Read_From_Sensor();
 
 	  sprintf(msg, "%hu%%\r\n", percentage);
-	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
 
-	  current_state = FSM_table[current_state][current_signal];
-
-	  if (percentage < 80) {
+	  if (percentage < 80) { //define and set border of dry moisture value (percentage > n)
 		  Watering_Handler();
 	  }
 
-	  HAL_Delay(2000);
+	  HAL_Delay(2000); //set proper delay (30m - 1,800,000)
 
   }
   /* USER CODE END 3 */
@@ -562,14 +562,19 @@ static int MAP(int input, int input_min, int input_max, int output_min, int outp
 }
 
 static void Watering_Handler(void){
-	int percentage;
-
 	Watering();
-	HAL_Delay(1500);
+	HAL_Delay(1500); //set 45s - 90s delay
 
 	percentage = Read_From_Sensor();
-	if (percentage < 80) {
+	if (percentage < 80) { //define and set border of dry moisture value (percentage > n)
 		Watering();
+		HAL_Delay(1500); //set 45s - 90s delay
+		percentage = Read_From_Sensor();
+
+		if (percentage < 80) { //define and set border of dry moisture value (percentage > n)
+			Trouble_Watering();
+
+		}
 	}
 
 
@@ -580,13 +585,47 @@ static void Watering(void) {
 	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
 
-	HAL_Delay(1500);
+	HAL_Delay(1500); //define delay value
 
 	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
 
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
 
+}
+
+static void Trouble_Watering(void) {
+	current_state = FSM_table[current_state][current_signal];
+
+	while(current_state == trouble) {
+		Alarm();
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+
+		HAL_Delay(1500); //define delay value
+
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
+
+		HAL_Delay(1500); //set 45s- 90s delay
+		percentage = Read_From_Sensor();
+		if (percentage > 80) { //define and set border of wet moisture value (percentage < n)
+			current_state = FSM_table[current_state][current_signal];
+
+		}
+	}
+}
+
+static void Alarm(void){
+	int repeat = 0;
+
+	while(repeat < 5) { //set repeat <= 3600 (every hour)
+		HAL_GPIO_TogglePin (GPIOE, LD3_Pin);
+		HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
+		HAL_Delay(500);
+		HAL_GPIO_TogglePin (GPIOE, LD3_Pin);
+		HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
+		HAL_Delay(500);
+		repeat++;
+	}
 }
 /* USER CODE END 4 */
 
