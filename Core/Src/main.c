@@ -22,6 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stm32f3xx_it.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -75,6 +76,7 @@ static void Trouble_Watering(void);
 static int MAP(int, int, int, int, int);
 static int Read_From_Sensor(void);
 static void Alarm(void);
+static void Ext_Delay(void);
 
 /* USER CODE END PFP */
 
@@ -85,17 +87,34 @@ enum states
 	standard,
 	trouble,
 };
+
+enum modes
+{
+	low,
+	normal,
+	high,
+	large,
+};
+
 enum signals
 {
 	sign0,
 };
 
-enum states FSM_table[2][1] = {
+enum states FSM_states_table[2][1] = {
 	[standard][sign0] = trouble,
     [trouble][sign0] = standard,
 };
 
+enum modes FSM_modes_table[4][1] = {
+	[low][sign0] = normal,
+    [normal][sign0] = high,
+	[high][sign0] = large,
+	[large][sign0] = low,
+};
+
 enum states current_state = standard;
+enum modes current_mode = low;
 enum signals current_signal = sign0;
 
 int percentage;
@@ -153,7 +172,8 @@ int main(void)
 	  sprintf(msg, "%hu%%\r\n", percentage);
 	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
 
-	  if (percentage < 80) { //define and set border of dry moisture value (percentage > n)
+	  if (percentage < 80)
+	  { //define and set border of dry moisture value (percentage > n)
 		  Watering_Handler();
 	  }
 
@@ -501,10 +521,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2|GPIO_PIN_10, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : DRDY_Pin MEMS_INT3_Pin MEMS_INT4_Pin MEMS_INT1_Pin
-                           MEMS_INT2_Pin */
-  GPIO_InitStruct.Pin = DRDY_Pin|MEMS_INT3_Pin|MEMS_INT4_Pin|MEMS_INT1_Pin
-                          |MEMS_INT2_Pin;
+  /*Configure GPIO pins : DRDY_Pin MEMS_INT3_Pin MEMS_INT4_Pin MEMS_INT2_Pin */
+  GPIO_InitStruct.Pin = DRDY_Pin|MEMS_INT3_Pin|MEMS_INT4_Pin|MEMS_INT2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
@@ -520,11 +538,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pin : PA0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA2 */
   GPIO_InitStruct.Pin = GPIO_PIN_2;
@@ -540,10 +558,15 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
-static int Read_From_Sensor(void){
+static int Read_From_Sensor(void)
+{
 	uint16_t raw;
 	int percentage;
 
@@ -561,17 +584,20 @@ static int MAP(int input, int input_min, int input_max, int output_min, int outp
 	return ((((input - input_min)*(output_max - output_min))/(input_max - input_min)) + output_min);
 }
 
-static void Watering_Handler(void){
+static void Watering_Handler(void)
+{
 	Watering();
 	HAL_Delay(1500); //set 45s - 90s delay
 
 	percentage = Read_From_Sensor();
-	if (percentage < 80) { //define and set border of dry moisture value (percentage > n)
+	if (percentage < 80)
+	{ //define and set border of dry moisture value (percentage > n)
 		Watering();
 		HAL_Delay(1500); //set 45s - 90s delay
 		percentage = Read_From_Sensor();
 
-		if (percentage < 80) { //define and set border of dry moisture value (percentage > n)
+		if (percentage < 80)
+		{ //define and set border of dry moisture value (percentage > n)
 			Trouble_Watering();
 
 		}
@@ -580,7 +606,8 @@ static void Watering_Handler(void){
 
 }
 
-static void Watering(void) {
+static void Watering(void)
+{
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
@@ -594,8 +621,9 @@ static void Watering(void) {
 
 }
 
-static void Trouble_Watering(void) {
-	current_state = FSM_table[current_state][current_signal];
+static void Trouble_Watering(void)
+{
+	current_state = FSM_states_table[current_state][current_signal];
 
 	while(current_state == trouble) {
 		Alarm();
@@ -607,17 +635,20 @@ static void Trouble_Watering(void) {
 
 		HAL_Delay(1500); //set 45s- 90s delay
 		percentage = Read_From_Sensor();
-		if (percentage > 80) { //define and set border of wet moisture value (percentage < n)
-			current_state = FSM_table[current_state][current_signal];
+		if (percentage > 80)
+		{ //define and set border of wet moisture value (percentage < n)
+			current_state = FSM_states_table[current_state][current_signal];
 
 		}
 	}
 }
 
-static void Alarm(void){
+static void Alarm(void)
+{
 	int repeat = 0;
 
-	while(repeat < 5) { //set repeat <= 3600 (every hour)
+	while(repeat < 5)
+	{ //set repeat <= 3600 (every hour)
 		HAL_GPIO_TogglePin (GPIOE, LD3_Pin);
 		HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
 		HAL_Delay(500);
@@ -627,6 +658,63 @@ static void Alarm(void){
 		repeat++;
 	}
 }
+
+static void Ext_Delay(void)
+{
+	int c;
+	for (c = 1; c <= 500000; c++)
+	{}
+}
+
+void EXTI0_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI0_IRQn 0 */
+  /* USER CODE END EXTI0_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  /* USER CODE BEGIN EXTI0_IRQn 1 */
+  current_mode = FSM_modes_table[current_mode][current_signal];
+  if(current_mode == low) {
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	  Ext_Delay();
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+  }
+  else if(current_mode == normal)
+  {
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+	  Ext_Delay();
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+
+  }
+  else if(current_mode == high)
+  {
+
+  	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+  	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+  	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
+  	  Ext_Delay();
+  	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+  	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+  	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
+
+  }
+  else
+  {
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
+	  Ext_Delay();
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
+
+  }
+  /* USER CODE END EXTI0_IRQn 1 */
+}
+
 /* USER CODE END 4 */
 
 /**
