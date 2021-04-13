@@ -26,6 +26,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <stdbool.h>
 
 /* USER CODE END Includes */
 
@@ -70,57 +72,38 @@ static void MX_USART1_UART_Init(void);
 static void MX_USB_PCD_Init(void);
 static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
-static void Watering_Handler(void);
-static void Humidify(int);
-static void Trouble_Watering(void);
-static int MAP(int, int, int, int, int);
+static void Humidify(void);
+static int Map(int, int, int, int, int);
 static int Read_From_Sensor(void);
-static void Alarm(void);
+static void Flash_LED(void);
 static void Ext_Delay(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-struct state;
-typedef void state_fn(struct state *);
+struct State;
+typedef void state_fn(struct State *);
 
-struct state
+typedef enum
+{
+	LOW,
+	MEDIUM,
+	HIGH,
+	ULTRA,
+} Mode;
+
+int Mode_Delay[4] = { 2000, 5000, 10000, 15000 };
+
+struct State
 {
     state_fn * next;
-    enum modes mode;
-    int count_unsuccessful_waterings = 0;
-    int last_counted_percentage = -1;
+    int cnt_unsucc_waterings;
 };
 
-state_fn watering, idle, panic;
+static state_fn Watering, Idle, Panic;
 
-
-
-
-enum modes
-{
-	low = 5000,
-	normal = 15000,
-	high = 25000,
-	large = 60000,
-};
-
-enum signals
-{
-	sign0,
-};
-
-enum modes FSM_modes_table[4][1] = {
-	[low][sign0] = normal,
-    [normal][sign0] = high,
-	[high][sign0] = large,
-	[large][sign0] = low,
-};
-
-enum states current_state = standard;
-enum modes current_mode = low;
-enum signals current_signal = sign0;
+Mode current_mode = LOW;
 
 /* USER CODE END 0 */
 
@@ -160,7 +143,7 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim1);
-  struct state state = { idle, low };
+  struct State state = { Idle, 0 };
   HAL_Delay(2000); // set correct value
   /* USER CODE END 2 */
 
@@ -171,19 +154,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-	  /* percentage = Read_From_Sensor();
-
-	   sprintf(msg, "%hu%%\r\n", percentage);
-	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
-
-	  if (percentage < 80)
-	  { //define and set border of dry moisture value (percentage > n)
-		  Watering_Handler();
-	  }
-
-	  HAL_Delay(2000); //set proper delay (30m - 1,800,000)
-	   */
 	  state.next(&state);
   }
   /* USER CODE END 3 */
@@ -580,80 +550,58 @@ static int Read_From_Sensor(void)
 	HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 	raw = HAL_ADC_GetValue(&hadc1);
 
-	percentage = MAP(raw, 1230, 3040, 0, 100);
+	percentage = Map(raw, 1230, 3140, 0, 100);
 
 	return percentage;
 }
 
-static int MAP(int input, int input_min, int input_max, int output_min, int output_max)
+static int Map(int input, int input_min, int input_max, int output_min, int output_max)
 {
 	return ((((input - input_min)*(output_max - output_min))/(input_max - input_min)) + output_min);
 }
 
-static void watering(struct state * state)
+static void Watering(struct State * state)
 {
-	Humidify(state->mode);
-	HAL_Delay(5000); // fix
-	state->next = idle;
+    int dryness_before = Read_From_Sensor();
+    Humidify();
+    HAL_Delay(5000); // fix
+    int dryness_after = Read_From_Sensor();
+
+    if (abs(dryness_after - dryness_before) >= 10)
+    	state->cnt_unsucc_waterings = 0;
+    else
+    	state->cnt_unsucc_waterings++;
+
+    state->next = Idle;
 }
 
-static void idle(struct state * state)
+static void Idle(struct State * state)
 {
-	char msg[10]; // comment debug info
-	int percentage_before = Read_From_Sensor();
+    char msg[10]; // comment debug info
+    int dryness = Read_From_Sensor();
 
-	sprintf(msg, "%hu%%\r\n", percentage_before);
-	HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
+    sprintf(msg, "%hu%%\r\n", dryness);
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
 
-	if (percentage_before < 80)
-	{ //define and set border of dry moisture value (percentage > n)
-		state->next = watering;
-		int percentage_after = Read_From_Sensor();
-		if (percentage_before - percentage_after < 10 && ++state->count_unsuccessful_waterings >= 2)
-		{
-			state->next = alarm;
-		}
-	}
-	else
-	{
-		HAL_Delay(10000); // set proper value
-	}
+    if (dryness > 80)
+        state->next = state->cnt_unsucc_waterings >= 2 ? Panic : Watering;
+    else
+        HAL_Delay(10000); // set proper value
 }
 
-static void panic(struct state * state)
+static void Panic(struct State * state)
 {
-
+	Flash_LED();
+	state->next = Watering;
 }
 
-static void Watering_Handler(void)
-{
-	Watering();
-	HAL_Delay(1500); //set 45s - 90s delay
-
-	percentage = Read_From_Sensor();
-	if (percentage < 80)
-	{ //define and set border of dry moisture value (percentage > n)
-		Watering();
-		HAL_Delay(1500); //set 45s - 90s delay
-		percentage = Read_From_Sensor();
-
-		if (percentage < 80)
-		{ //define and set border of dry moisture value (percentage > n)
-			Trouble_Watering();
-
-		}
-	}
-
-
-}
-
-static void Humidify(int delay)
+static void Humidify(void)
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
 
-	HAL_Delay(delay);
+	HAL_Delay(Mode_Delay[current_mode]);
 
 	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
@@ -662,33 +610,12 @@ static void Humidify(int delay)
 
 }
 
-static void Trouble_Watering(void)
-{
-	current_state = FSM_states_table[current_state][current_signal];
 
-	while(current_state == trouble) {
-		Alarm();
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
-
-		HAL_Delay(1500); //define delay value
-
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
-
-		HAL_Delay(1500); //set 45s- 90s delay
-		percentage = Read_From_Sensor();
-		if (percentage > 80)
-		{ //define and set border of wet moisture value (percentage < n)
-			current_state = FSM_states_table[current_state][current_signal];
-
-		}
-	}
-}
-
-static void Alarm(void)
+static void Flash_LED(void)
 {
 	int repeat = 0;
 
-	while(repeat < 5)
+	while(repeat++ < 5)
 	{ //set repeat <= 3600 (every hour)
 		HAL_GPIO_TogglePin (GPIOE, LD3_Pin);
 		HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
@@ -696,7 +623,6 @@ static void Alarm(void)
 		HAL_GPIO_TogglePin (GPIOE, LD3_Pin);
 		HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
 		HAL_Delay(500);
-		repeat++;
 	}
 }
 
@@ -713,35 +639,31 @@ void EXTI0_IRQHandler(void)
   /* USER CODE END EXTI0_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   /* USER CODE BEGIN EXTI0_IRQn 1 */
-  current_mode = FSM_modes_table[current_mode][current_signal];
-  if(current_mode == low) {
+  current_mode = (current_mode + 1) % 4;
+  switch(current_mode)
+  {
+  case LOW:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  Ext_Delay();
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
-  }
-  else if(current_mode == normal)
-  {
+	  break;
+  case MEDIUM:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
 	  Ext_Delay();
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
-
-  }
-  else if(current_mode == high)
-  {
-
-  	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
-  	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
-  	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
-  	  Ext_Delay();
-  	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
-  	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
-  	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
-
-  }
-  else
-  {
+	  break;
+  case HIGH:
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
+	  Ext_Delay();
+	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
+	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
+	  break;
+  case ULTRA:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
@@ -751,7 +673,9 @@ void EXTI0_IRQHandler(void)
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
-
+	  break;
+  default:
+	  break;
   }
   /* USER CODE END EXTI0_IRQn 1 */
 }
