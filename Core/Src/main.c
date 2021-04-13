@@ -71,7 +71,7 @@ static void MX_USB_PCD_Init(void);
 static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 static void Watering_Handler(void);
-static void Watering(void);
+static void Humidify(int);
 static void Trouble_Watering(void);
 static int MAP(int, int, int, int, int);
 static int Read_From_Sensor(void);
@@ -82,28 +82,33 @@ static void Ext_Delay(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-enum states
+struct state;
+typedef void state_fn(struct state *);
+
+struct state
 {
-	standard,
-	trouble,
+    state_fn * next;
+    enum modes mode;
+    int count_unsuccessful_waterings = 0;
+    int last_counted_percentage = -1;
 };
+
+state_fn watering, idle, panic;
+
+
+
 
 enum modes
 {
-	low,
-	normal,
-	high,
-	large,
+	low = 5000,
+	normal = 15000,
+	high = 25000,
+	large = 60000,
 };
 
 enum signals
 {
 	sign0,
-};
-
-enum states FSM_states_table[2][1] = {
-	[standard][sign0] = trouble,
-    [trouble][sign0] = standard,
 };
 
 enum modes FSM_modes_table[4][1] = {
@@ -117,7 +122,6 @@ enum states current_state = standard;
 enum modes current_mode = low;
 enum signals current_signal = sign0;
 
-int percentage;
 /* USER CODE END 0 */
 
 /**
@@ -127,7 +131,6 @@ int percentage;
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	char msg[10];
 
   /* USER CODE END 1 */
 
@@ -157,6 +160,8 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim1);
+  struct state state = { idle, low };
+  HAL_Delay(2000); // set correct value
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -167,9 +172,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  percentage = Read_From_Sensor();
+	  /* percentage = Read_From_Sensor();
 
-	  sprintf(msg, "%hu%%\r\n", percentage);
+	   sprintf(msg, "%hu%%\r\n", percentage);
 	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
 
 	  if (percentage < 80)
@@ -178,7 +183,8 @@ int main(void)
 	  }
 
 	  HAL_Delay(2000); //set proper delay (30m - 1,800,000)
-
+	   */
+	  state.next(&state);
   }
   /* USER CODE END 3 */
 }
@@ -584,6 +590,41 @@ static int MAP(int input, int input_min, int input_max, int output_min, int outp
 	return ((((input - input_min)*(output_max - output_min))/(input_max - input_min)) + output_min);
 }
 
+static void watering(struct state * state)
+{
+	Humidify(state->mode);
+	HAL_Delay(5000); // fix
+	state->next = idle;
+}
+
+static void idle(struct state * state)
+{
+	char msg[10]; // comment debug info
+	int percentage_before = Read_From_Sensor();
+
+	sprintf(msg, "%hu%%\r\n", percentage_before);
+	HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
+
+	if (percentage_before < 80)
+	{ //define and set border of dry moisture value (percentage > n)
+		state->next = watering;
+		int percentage_after = Read_From_Sensor();
+		if (percentage_before - percentage_after < 10 && ++state->count_unsuccessful_waterings >= 2)
+		{
+			state->next = alarm;
+		}
+	}
+	else
+	{
+		HAL_Delay(10000); // set proper value
+	}
+}
+
+static void panic(struct state * state)
+{
+
+}
+
 static void Watering_Handler(void)
 {
 	Watering();
@@ -606,13 +647,13 @@ static void Watering_Handler(void)
 
 }
 
-static void Watering(void)
+static void Humidify(int delay)
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
 
-	HAL_Delay(1500); //define delay value
+	HAL_Delay(delay);
 
 	HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	HAL_GPIO_TogglePin (GPIOE, LD7_Pin);
