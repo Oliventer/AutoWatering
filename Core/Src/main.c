@@ -1,27 +1,6 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
-  * All rights reserved.</center></h2>
-  *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
-#include "main.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+/* Includes */
+#include "main.h"
 #include "stm32f3xx_it.h"
 #include <string.h>
 #include <stdio.h>
@@ -29,27 +8,15 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-/* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
+/* Defines */
 #define DELAY_BEFORE_EXECUTING 900000
 #define DELAY_AFTER_WATERING 180000
 #define DELAY_AFTER_LOOP 7200000
 #define ALARM_LIGHTS_DELAY 500
-/* USER CODE END PD */
 
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
 
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
+/* Define Variables */
 ADC_HandleTypeDef hadc1;
 
 I2C_HandleTypeDef hi2c1;
@@ -60,11 +27,8 @@ UART_HandleTypeDef huart1;
 
 PCD_HandleTypeDef hpcd_USB_FS;
 
-/* USER CODE BEGIN PV */
 
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
+/* Function prototypes */
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
@@ -72,24 +36,22 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USB_PCD_Init(void);
-/* USER CODE BEGIN PFP */
 static void Humidify(void);
 static int Convert_to_percents(int, int, int, int, int);
 static int Read_From_Sensor(void);
 static void Flash_LED(void);
 static void Ext_Delay(void);
 
-/* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
+/* Code */
 
 /* State machine declaration */
 struct State;
 typedef void state_fn(struct State *);
 
 /* System operating mods:
- * Provides different watering time. */
+ * Provides different watering time.
+ */
 typedef enum
 {
 	LOW,
@@ -106,7 +68,8 @@ int Mode_Delay[4] = { 2000, 5000, 10000, 15000 };
  * Idle like main working state, Watering for watering case only and
  * Panic for non system-responsible cases, e.g lack of water in tank
  * In main loop execute function which corresponds to the current state
- * In every state function change current state by conditions */
+ * In every state function change current state by conditions
+ */
 
 struct State
 {
@@ -119,33 +82,17 @@ static state_fn Watering, Idle, Panic;
 
 Mode current_mode = LOW;
 
-/* USER CODE END 0 */
 
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
+/* The application entry point. */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
+  /* Controller Configuration */
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
   /* Configure the system clock */
   SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
@@ -154,34 +101,25 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_USB_PCD_Init();
-  /* USER CODE BEGIN 2 */
 
   /* Initializing starting state */
   struct State state = { Idle, 0 };
 
   /* Delay before program executing.
-   * Goal: give time to setting system before first watering */
+   * Goal: give time to setting system before first watering
+   */
   HAL_Delay(DELAY_BEFORE_EXECUTING);
-  /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+  /* Main infinite loop */
   while (1)
   {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
 
 	  /* Execute current state ("Idle" for first time) */
 	  state.next(&state);
   }
-  /* USER CODE END 3 */
 }
 
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+/* System Clock Configuration */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -228,24 +166,13 @@ void SystemClock_Config(void)
   }
 }
 
-/**
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* ADC1 Initialization Function */
 static void MX_ADC1_Init(void)
 {
-
-  /* USER CODE BEGIN ADC1_Init 0 */
-
-  /* USER CODE END ADC1_Init 0 */
 
   ADC_MultiModeTypeDef multimode = {0};
   ADC_ChannelConfTypeDef sConfig = {0};
 
-  /* USER CODE BEGIN ADC1_Init 1 */
-
-  /* USER CODE END ADC1_Init 1 */
   /** Common config
   */
   hadc1.Instance = ADC1;
@@ -285,27 +212,13 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN ADC1_Init 2 */
-
-  /* USER CODE END ADC1_Init 2 */
 
 }
 
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* I2C1 Initialization Function */
 static void MX_I2C1_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
   hi2c1.Init.Timing = 0x2000090E;
   hi2c1.Init.OwnAddress1 = 0;
@@ -331,27 +244,13 @@ static void MX_I2C1_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
 
 }
 
-/**
-  * @brief SPI1 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* SPI1 Initialization Function */
 static void MX_SPI1_Init(void)
 {
 
-  /* USER CODE BEGIN SPI1_Init 0 */
-
-  /* USER CODE END SPI1_Init 0 */
-
-  /* USER CODE BEGIN SPI1_Init 1 */
-
-  /* USER CODE END SPI1_Init 1 */
   /* SPI1 parameter configuration*/
   hspi1.Instance = SPI1;
   hspi1.Init.Mode = SPI_MODE_MASTER;
@@ -371,27 +270,13 @@ static void MX_SPI1_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN SPI1_Init 2 */
-
-  /* USER CODE END SPI1_Init 2 */
 
 }
 
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
+/* USART1 Initialization Function */
 static void MX_USART1_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
   huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
@@ -406,27 +291,14 @@ static void MX_USART1_UART_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
 
 }
 
 /**
-  * @brief USB Initialization Function
-  * @param None
-  * @retval None
-  */
+  * USB Initialization Function */
 static void MX_USB_PCD_Init(void)
 {
 
-  /* USER CODE BEGIN USB_Init 0 */
-
-  /* USER CODE END USB_Init 0 */
-
-  /* USER CODE BEGIN USB_Init 1 */
-
-  /* USER CODE END USB_Init 1 */
   hpcd_USB_FS.Instance = USB;
   hpcd_USB_FS.Init.dev_endpoints = 8;
   hpcd_USB_FS.Init.speed = PCD_SPEED_FULL;
@@ -437,17 +309,10 @@ static void MX_USB_PCD_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USB_Init 2 */
-
-  /* USER CODE END USB_Init 2 */
 
 }
 
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
+/* GPIO Initialization Function */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -555,17 +420,23 @@ static void Idle(struct State * state)
     // char msg[10]; *Debug info too
     int dryness = Read_From_Sensor();
 
-    /* Debug info, uncomment (with previous commented string) for display moisture values
-    sprintf(msg, "%hu%%\r\n", dryness);
-    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); */
+   /*
+    * Debug info, uncomment (with previous commented string) for display moisture values
+    * sprintf(msg, "%hu%%\r\n", dryness);
+    * HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+    */
 
     if (dryness > 87)
-    	/* Set up state to Panic if counter of unsuccessful watering == 2
-    	 * Else set up state to Watering */
+    	/*
+    	 * Set up state to Panic if counter of unsuccessful watering == 2
+    	 * Else set up state to Watering
+    	 */
         state->next = state->cnt_unsucc_waterings >= 2 ? Panic : Watering;
     else
-    	/* If watering is not needed, sets program to sleep
-    	 * Unobvious forth state Sleep */
+    	/*
+    	 * If watering is not needed, sets program to sleep
+    	 * Unobvious forth state Sleep
+    	 */
         HAL_Delay(DELAY_AFTER_LOOP); // set proper value
 }
 
@@ -574,14 +445,16 @@ static void Idle(struct State * state)
 static void Panic(struct State * state)
 {
 	/* Flashing LED for certain time,
-	 * Set up Watering state and try to make watering */
+	 * Set up Watering state and try to make watering
+	 */
 	Flash_LED();
 	state->next = Watering;
 }
 
 /* Function for pure watering.
  * Watering state function it's something like watering handler,
- * while Humidify responsible for watering only */
+ * while Humidify responsible for watering only
+ */
 static void Humidify(void)
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
@@ -624,11 +497,10 @@ static void Ext_Delay(void)
 /* Handle user button interrupt */
 void EXTI0_IRQHandler(void)
 {
-  /* USER CODE BEGIN EXTI0_IRQn 0 */
-  /* USER CODE END EXTI0_IRQn 0 */
+
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
-  /* USER CODE BEGIN EXTI0_IRQn 1 */
   current_mode = (current_mode + 1) % 4;
+
   /* Visualize mode changing by blinking LEDs */
   switch(current_mode)
   {
@@ -637,6 +509,7 @@ void EXTI0_IRQHandler(void)
 	  Ext_Delay();
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  break;
+
   case MEDIUM:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
@@ -644,6 +517,7 @@ void EXTI0_IRQHandler(void)
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
 	  break;
+
   case HIGH:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
@@ -653,6 +527,7 @@ void EXTI0_IRQHandler(void)
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
 	  break;
+
   case ULTRA:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD9_Pin);
@@ -664,27 +539,20 @@ void EXTI0_IRQHandler(void)
 	  HAL_GPIO_TogglePin (GPIOE, LD8_Pin);
 	  HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
 	  break;
+
   default:
 	  break;
   }
-  /* USER CODE END EXTI0_IRQn 1 */
 }
 
-/* USER CODE END 4 */
-
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+/* This function is executed in case of error occurrence. */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
+
   }
-  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
@@ -703,5 +571,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

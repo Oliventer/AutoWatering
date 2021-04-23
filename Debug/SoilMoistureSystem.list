@@ -23,21 +23,21 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
   9 .ARM.attributes 00000030  00000000  00000000  0002001c  2**0
                   CONTENTS, READONLY
- 10 .debug_info   00011436  00000000  00000000  0002004c  2**0
+ 10 .debug_info   00011434  00000000  00000000  0002004c  2**0
                   CONTENTS, READONLY, DEBUGGING
- 11 .debug_abbrev 000020d7  00000000  00000000  00031482  2**0
+ 11 .debug_abbrev 000020ed  00000000  00000000  00031480  2**0
                   CONTENTS, READONLY, DEBUGGING
- 12 .debug_aranges 00000f00  00000000  00000000  00033560  2**3
+ 12 .debug_aranges 00000f00  00000000  00000000  00033570  2**3
                   CONTENTS, READONLY, DEBUGGING
- 13 .debug_ranges 00000e28  00000000  00000000  00034460  2**3
+ 13 .debug_ranges 00000e28  00000000  00000000  00034470  2**3
                   CONTENTS, READONLY, DEBUGGING
- 14 .debug_line   0000847a  00000000  00000000  00035288  2**0
+ 14 .debug_line   00008470  00000000  00000000  00035298  2**0
                   CONTENTS, READONLY, DEBUGGING
- 15 .debug_str    00004c56  00000000  00000000  0003d702  2**0
+ 15 .debug_str    00004c56  00000000  00000000  0003d708  2**0
                   CONTENTS, READONLY, DEBUGGING
- 16 .comment      0000007c  00000000  00000000  00042358  2**0
+ 16 .comment      0000007c  00000000  00000000  0004235e  2**0
                   CONTENTS, READONLY
- 17 .debug_frame  00003f80  00000000  00000000  000423d4  2**2
+ 17 .debug_frame  00003f80  00000000  00000000  000423dc  2**2
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .text:
@@ -71,32 +71,24 @@ Disassembly of section .text:
  80001c4:	080048bc 	.word	0x080048bc
 
 080001c8 <main>:
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
+Mode current_mode = LOW;
+
+
+/* The application entry point. */
 int main(void)
 {
  80001c8:	b580      	push	{r7, lr}
  80001ca:	b082      	sub	sp, #8
  80001cc:	af00      	add	r7, sp, #0
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
+  /* Controller Configuration */
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
  80001ce:	f000 fdbf 	bl	8000d50 <HAL_Init>
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
  80001d2:	f000 f81d 	bl	8000210 <SystemClock_Config>
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
@@ -111,7 +103,6 @@ int main(void)
  80001e6:	f000 f967 	bl	80004b8 <MX_USART1_UART_Init>
   MX_USB_PCD_Init();
  80001ea:	f000 f995 	bl	8000518 <MX_USB_PCD_Init>
-  /* USER CODE BEGIN 2 */
 
   /* Initializing starting state */
   struct State state = { Idle, 0 };
@@ -121,13 +112,14 @@ int main(void)
  80001f4:	607b      	str	r3, [r7, #4]
 
   /* Delay before program executing.
-   * Goal: give time to setting system before first watering */
+   * Goal: give time to setting system before first watering
+   */
   HAL_Delay(DELAY_BEFORE_EXECUTING);
  80001f6:	4805      	ldr	r0, [pc, #20]	; (800020c <main+0x44>)
  80001f8:	f000 fe10 	bl	8000e1c <HAL_Delay>
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
+  /* Main infinite loop */
+  while (1)
+  {
 
 	  /* Execute current state ("Idle" for first time) */
 	  state.next(&state);
@@ -141,10 +133,10 @@ int main(void)
  800020c:	000dbba0 	.word	0x000dbba0
 
 08000210 <SystemClock_Config>:
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+  }
+}
+
+/* System Clock Configuration */
 void SystemClock_Config(void)
 {
  8000210:	b580      	push	{r7, lr}
@@ -275,19 +267,13 @@ void SystemClock_Config(void)
  80002d8:	000200a1 	.word	0x000200a1
 
 080002dc <MX_ADC1_Init>:
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
+
+/* ADC1 Initialization Function */
 static void MX_ADC1_Init(void)
 {
  80002dc:	b580      	push	{r7, lr}
  80002de:	b08a      	sub	sp, #40	; 0x28
  80002e0:	af00      	add	r7, sp, #0
-
-  /* USER CODE BEGIN ADC1_Init 0 */
-
-  /* USER CODE END ADC1_Init 0 */
 
   ADC_MultiModeTypeDef multimode = {0};
  80002e2:	f107 031c 	add.w	r3, r7, #28
@@ -304,9 +290,7 @@ static void MX_ADC1_Init(void)
  80002f8:	60da      	str	r2, [r3, #12]
  80002fa:	611a      	str	r2, [r3, #16]
  80002fc:	615a      	str	r2, [r3, #20]
-  /* USER CODE BEGIN ADC1_Init 1 */
 
-  /* USER CODE END ADC1_Init 1 */
   /** Common config
   */
   hadc1.Instance = ADC1;
@@ -424,9 +408,6 @@ static void MX_ADC1_Init(void)
     Error_Handler();
  80003aa:	f000 fb23 	bl	80009f4 <Error_Handler>
   }
-  /* USER CODE BEGIN ADC1_Init 2 */
-
-  /* USER CODE END ADC1_Init 2 */
 
 }
  80003ae:	bf00      	nop
@@ -437,19 +418,13 @@ static void MX_ADC1_Init(void)
  80003b8:	20000088 	.word	0x20000088
 
 080003bc <MX_I2C1_Init>:
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
+
+/* I2C1 Initialization Function */
 static void MX_I2C1_Init(void)
 {
  80003bc:	b580      	push	{r7, lr}
  80003be:	af00      	add	r7, sp, #0
-  /* USER CODE END I2C1_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
  80003c0:	4b1b      	ldr	r3, [pc, #108]	; (8000430 <MX_I2C1_Init+0x74>)
  80003c2:	4a1c      	ldr	r2, [pc, #112]	; (8000434 <MX_I2C1_Init+0x78>)
@@ -522,9 +497,6 @@ static void MX_I2C1_Init(void)
     Error_Handler();
  8000426:	f000 fae5 	bl	80009f4 <Error_Handler>
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
 
 }
  800042a:	bf00      	nop
@@ -535,18 +507,13 @@ static void MX_I2C1_Init(void)
  8000438:	2000090e 	.word	0x2000090e
 
 0800043c <MX_SPI1_Init>:
-  * @brief SPI1 Initialization Function
-  * @param None
-  * @retval None
-  */
+
+/* SPI1 Initialization Function */
 static void MX_SPI1_Init(void)
 {
  800043c:	b580      	push	{r7, lr}
  800043e:	af00      	add	r7, sp, #0
 
-  /* USER CODE BEGIN SPI1_Init 1 */
-
-  /* USER CODE END SPI1_Init 1 */
   /* SPI1 parameter configuration*/
   hspi1.Instance = SPI1;
  8000440:	4b1b      	ldr	r3, [pc, #108]	; (80004b0 <MX_SPI1_Init+0x74>)
@@ -614,9 +581,6 @@ static void MX_SPI1_Init(void)
     Error_Handler();
  80004a6:	f000 faa5 	bl	80009f4 <Error_Handler>
   }
-  /* USER CODE BEGIN SPI1_Init 2 */
-
-  /* USER CODE END SPI1_Init 2 */
 
 }
  80004aa:	bf00      	nop
@@ -626,19 +590,13 @@ static void MX_SPI1_Init(void)
  80004b4:	40013000 	.word	0x40013000
 
 080004b8 <MX_USART1_UART_Init>:
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
+
+/* USART1 Initialization Function */
 static void MX_USART1_UART_Init(void)
 {
  80004b8:	b580      	push	{r7, lr}
  80004ba:	af00      	add	r7, sp, #0
-  /* USER CODE END USART1_Init 0 */
 
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
  80004bc:	4b14      	ldr	r3, [pc, #80]	; (8000510 <MX_USART1_UART_Init+0x58>)
  80004be:	4a15      	ldr	r2, [pc, #84]	; (8000514 <MX_USART1_UART_Init+0x5c>)
@@ -689,9 +647,6 @@ static void MX_USART1_UART_Init(void)
     Error_Handler();
  8000506:	f000 fa75 	bl	80009f4 <Error_Handler>
   }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
 
 }
  800050a:	bf00      	nop
@@ -701,19 +656,14 @@ static void MX_USART1_UART_Init(void)
  8000514:	40013800 	.word	0x40013800
 
 08000518 <MX_USB_PCD_Init>:
-  * @brief USB Initialization Function
-  * @param None
-  * @retval None
-  */
+
+/**
+  * USB Initialization Function */
 static void MX_USB_PCD_Init(void)
 {
  8000518:	b580      	push	{r7, lr}
  800051a:	af00      	add	r7, sp, #0
-  /* USER CODE END USB_Init 0 */
 
-  /* USER CODE BEGIN USB_Init 1 */
-
-  /* USER CODE END USB_Init 1 */
   hpcd_USB_FS.Instance = USB;
  800051c:	4b0d      	ldr	r3, [pc, #52]	; (8000554 <MX_USB_PCD_Init+0x3c>)
  800051e:	4a0e      	ldr	r2, [pc, #56]	; (8000558 <MX_USB_PCD_Init+0x40>)
@@ -748,9 +698,6 @@ static void MX_USB_PCD_Init(void)
     Error_Handler();
  800054c:	f000 fa52 	bl	80009f4 <Error_Handler>
   }
-  /* USER CODE BEGIN USB_Init 2 */
-
-  /* USER CODE END USB_Init 2 */
 
 }
  8000550:	bf00      	nop
@@ -759,10 +706,8 @@ static void MX_USB_PCD_Init(void)
  8000558:	40005c00 	.word	0x40005c00
 
 0800055c <MX_GPIO_Init>:
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
+
+/* GPIO Initialization Function */
 static void MX_GPIO_Init(void)
 {
  800055c:	b580      	push	{r7, lr}
@@ -1098,17 +1043,19 @@ static void Idle(struct State * state)
     int dryness = Read_From_Sensor();
  8000774:	f7ff ff90 	bl	8000698 <Read_From_Sensor>
  8000778:	60f8      	str	r0, [r7, #12]
-
-    /* Debug info, uncomment (with previous commented string) for display moisture values
-    sprintf(msg, "%hu%%\r\n", dryness);
-    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); */
+    * Debug info, uncomment (with previous commented string) for display moisture values
+    * sprintf(msg, "%hu%%\r\n", dryness);
+    * HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10);
+    */
 
     if (dryness > 87)
  800077a:	68fb      	ldr	r3, [r7, #12]
  800077c:	2b57      	cmp	r3, #87	; 0x57
  800077e:	dd09      	ble.n	8000794 <Idle+0x28>
-    	/* Set up state to Panic if counter of unsuccessful watering == 2
-    	 * Else set up state to Watering */
+    	/*
+    	 * Set up state to Panic if counter of unsuccessful watering == 2
+    	 * Else set up state to Watering
+    	 */
         state->next = state->cnt_unsucc_waterings >= 2 ? Panic : Watering;
  8000780:	687b      	ldr	r3, [r7, #4]
  8000782:	685b      	ldr	r3, [r3, #4]
@@ -1119,9 +1066,10 @@ static void Idle(struct State * state)
  800078c:	4a06      	ldr	r2, [pc, #24]	; (80007a8 <Idle+0x3c>)
  800078e:	687b      	ldr	r3, [r7, #4]
  8000790:	601a      	str	r2, [r3, #0]
-    else
-    	/* If watering is not needed, sets program to sleep
-    	 * Unobvious forth state Sleep */
+    	/*
+    	 * If watering is not needed, sets program to sleep
+    	 * Unobvious forth state Sleep
+    	 */
         HAL_Delay(DELAY_AFTER_LOOP); // set proper value
 }
  8000792:	e002      	b.n	800079a <Idle+0x2e>
@@ -1149,7 +1097,8 @@ static void Panic(struct State * state)
  80007b4:	af00      	add	r7, sp, #0
  80007b6:	6078      	str	r0, [r7, #4]
 	/* Flashing LED for certain time,
-	 * Set up Watering state and try to make watering */
+	 * Set up Watering state and try to make watering
+	 */
 	Flash_LED();
  80007b8:	f000 f83e 	bl	8000838 <Flash_LED>
 	state->next = Watering;
@@ -1165,10 +1114,10 @@ static void Panic(struct State * state)
  80007cc:	08000715 	.word	0x08000715
 
 080007d0 <Humidify>:
-
 /* Function for pure watering.
  * Watering state function it's something like watering handler,
- * while Humidify responsible for watering only */
+ * while Humidify responsible for watering only
+ */
 static void Humidify(void)
 {
  80007d0:	b580      	push	{r7, lr}
@@ -1307,12 +1256,10 @@ void EXTI0_IRQHandler(void)
 {
  80008c0:	b580      	push	{r7, lr}
  80008c2:	af00      	add	r7, sp, #0
-  /* USER CODE BEGIN EXTI0_IRQn 0 */
-  /* USER CODE END EXTI0_IRQn 0 */
+
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
  80008c4:	2001      	movs	r0, #1
  80008c6:	f001 fe21 	bl	800250c <HAL_GPIO_EXTI_IRQHandler>
-  /* USER CODE BEGIN EXTI0_IRQn 1 */
   current_mode = (current_mode + 1) % 4;
  80008ca:	4b48      	ldr	r3, [pc, #288]	; (80009ec <EXTI0_IRQHandler+0x12c>)
  80008cc:	781b      	ldrb	r3, [r3, #0]
@@ -1325,6 +1272,7 @@ void EXTI0_IRQHandler(void)
  80008de:	b2da      	uxtb	r2, r3
  80008e0:	4b42      	ldr	r3, [pc, #264]	; (80009ec <EXTI0_IRQHandler+0x12c>)
  80008e2:	701a      	strb	r2, [r3, #0]
+
   /* Visualize mode changing by blinking LEDs */
   switch(current_mode)
  80008e4:	4b41      	ldr	r3, [pc, #260]	; (80009ec <EXTI0_IRQHandler+0x12c>)
@@ -1352,6 +1300,7 @@ void EXTI0_IRQHandler(void)
  8000918:	f001 fdde 	bl	80024d8 <HAL_GPIO_TogglePin>
 	  break;
  800091c:	e063      	b.n	80009e6 <EXTI0_IRQHandler+0x126>
+
   case MEDIUM:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
  800091e:	f44f 4100 	mov.w	r1, #32768	; 0x8000
@@ -1373,6 +1322,7 @@ void EXTI0_IRQHandler(void)
  8000946:	f001 fdc7 	bl	80024d8 <HAL_GPIO_TogglePin>
 	  break;
  800094a:	e04c      	b.n	80009e6 <EXTI0_IRQHandler+0x126>
+
   case HIGH:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
  800094c:	f44f 4100 	mov.w	r1, #32768	; 0x8000
@@ -1402,6 +1352,7 @@ void EXTI0_IRQHandler(void)
  8000988:	f001 fda6 	bl	80024d8 <HAL_GPIO_TogglePin>
 	  break;
  800098c:	e02b      	b.n	80009e6 <EXTI0_IRQHandler+0x126>
+
   case ULTRA:
 	  HAL_GPIO_TogglePin (GPIOE, LD6_Pin);
  800098e:	f44f 4100 	mov.w	r1, #32768	; 0x8000
@@ -1439,11 +1390,11 @@ void EXTI0_IRQHandler(void)
  80009de:	f001 fd7b 	bl	80024d8 <HAL_GPIO_TogglePin>
 	  break;
  80009e2:	e000      	b.n	80009e6 <EXTI0_IRQHandler+0x126>
+
   default:
 	  break;
  80009e4:	bf00      	nop
   }
-  /* USER CODE END EXTI0_IRQn 1 */
 }
  80009e6:	bf00      	nop
  80009e8:	bd80      	pop	{r7, pc}
@@ -1452,10 +1403,8 @@ void EXTI0_IRQHandler(void)
  80009f0:	48001000 	.word	0x48001000
 
 080009f4 <Error_Handler>:
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+
+/* This function is executed in case of error occurrence. */
 void Error_Handler(void)
 {
  80009f4:	b480      	push	{r7}
@@ -1467,8 +1416,6 @@ __STATIC_FORCEINLINE void __disable_irq(void)
 {
   __ASM volatile ("cpsid i" : : : "memory");
  80009f8:	b672      	cpsid	i
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
  80009fa:	e7fe      	b.n	80009fa <Error_Handler+0x6>
