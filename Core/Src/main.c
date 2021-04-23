@@ -38,6 +38,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define DELAY_BEFORE_EXECUTING 900000
+#define DELAY_AFTER_WATERING 180000
+#define DELAY_AFTER_LOOP 7200000
+#define ALARM_LIGHTS_DELAY 500
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,8 +55,6 @@ ADC_HandleTypeDef hadc1;
 I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
-
-TIM_HandleTypeDef htim1;
 
 UART_HandleTypeDef huart1;
 
@@ -70,10 +72,9 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USB_PCD_Init(void);
-static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 static void Humidify(void);
-static int Map(int, int, int, int, int);
+static int Convert_to_percents(int, int, int, int, int);
 static int Read_From_Sensor(void);
 static void Flash_LED(void);
 static void Ext_Delay(void);
@@ -82,9 +83,13 @@ static void Ext_Delay(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* State machine declaration */
 struct State;
 typedef void state_fn(struct State *);
 
+/* System operating mods:
+ * Provides different watering time. */
 typedef enum
 {
 	LOW,
@@ -93,14 +98,23 @@ typedef enum
 	ULTRA,
 } Mode;
 
+/* Watering time for different mods */
 int Mode_Delay[4] = { 2000, 5000, 10000, 15000 };
+
+/* State machine implementation. Idea of state machine:
+ * Three working states with precise logic segregation.
+ * Idle like main working state, Watering for watering case only and
+ * Panic for non system-responsible cases, e.g lack of water in tank
+ * In main loop execute function which corresponds to the current state
+ * In every state function change current state by conditions */
 
 struct State
 {
-    state_fn * next;
+    state_fn * next; // Pointer to the next state
     int cnt_unsucc_waterings;
 };
 
+/* Declare three state functions. */
 static state_fn Watering, Idle, Panic;
 
 Mode current_mode = LOW;
@@ -140,11 +154,14 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_USB_PCD_Init();
-  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim1);
+
+  /* Initializing starting state */
   struct State state = { Idle, 0 };
-  HAL_Delay(2000); // set correct value
+
+  /* Delay before program executing.
+   * Goal: give time to setting system before first watering */
+  HAL_Delay(DELAY_BEFORE_EXECUTING);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -154,6 +171,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  /* Execute current state ("Idle" for first time) */
 	  state.next(&state);
   }
   /* USER CODE END 3 */
@@ -198,13 +217,11 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART1
-                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_TIM1
-                              |RCC_PERIPHCLK_ADC12;
+                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_ADC12;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
   PeriphClkInit.USBClockSelection = RCC_USBCLKSOURCE_PLL;
-  PeriphClkInit.Tim1ClockSelection = RCC_TIM1CLK_HCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -361,53 +378,6 @@ static void MX_SPI1_Init(void)
 }
 
 /**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 15999;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 5000;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-
-}
-
-/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -495,7 +465,7 @@ static void MX_GPIO_Init(void)
                           |LD6_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2|GPIO_PIN_10, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
 
   /*Configure GPIO pins : DRDY_Pin MEMS_INT3_Pin MEMS_INT4_Pin MEMS_INT2_Pin */
   GPIO_InitStruct.Pin = DRDY_Pin|MEMS_INT3_Pin|MEMS_INT4_Pin|MEMS_INT2_Pin;
@@ -527,13 +497,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
@@ -541,6 +504,8 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+/* Read sensor data from analog port */
 static int Read_From_Sensor(void)
 {
 	uint16_t raw;
@@ -550,51 +515,73 @@ static int Read_From_Sensor(void)
 	HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 	raw = HAL_ADC_GetValue(&hadc1);
 
-	percentage = Map(raw, 1230, 3140, 0, 100);
+	percentage = Convert_to_percents(raw, 1230, 3140, 0, 100);
 
 	return percentage;
 }
 
-static int Map(int input, int input_min, int input_max, int output_min, int output_max)
+/* convert analog port output (1230-3140) to percents (1-100)*/
+static int Convert_to_percents(int input, int input_min, int input_max, int output_min, int output_max)
 {
 	return ((((input - input_min)*(output_max - output_min))/(input_max - input_min)) + output_min);
 }
 
+/* Watering state function for watering control */
 static void Watering(struct State * state)
 {
     int dryness_before = Read_From_Sensor();
     Humidify();
-    HAL_Delay(5000); // fix
+
+    /* Wait for the water to be absorbed into the ground.
+     * After, reads moisture data again */
+    HAL_Delay(DELAY_AFTER_WATERING);
     int dryness_after = Read_From_Sensor();
 
+    /* If moisture change after watering, reset unsuccessful watering counter
+     * Else increment counter */
     if (abs(dryness_after - dryness_before) >= 10)
     	state->cnt_unsucc_waterings = 0;
     else
     	state->cnt_unsucc_waterings++;
 
+    /* Set up next state to Idle */
     state->next = Idle;
 }
 
+/* Idle state function for system control logic */
 static void Idle(struct State * state)
 {
-    char msg[10]; // comment debug info
+
+    // char msg[10]; *Debug info too
     int dryness = Read_From_Sensor();
 
+    /* Debug info, uncomment (with previous commented string) for display moisture values
     sprintf(msg, "%hu%%\r\n", dryness);
-    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); // comment debug info
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 10); */
 
-    if (dryness > 80)
+    if (dryness > 87)
+    	/* Set up state to Panic if counter of unsuccessful watering == 2
+    	 * Else set up state to Watering */
         state->next = state->cnt_unsucc_waterings >= 2 ? Panic : Watering;
     else
-        HAL_Delay(10000); // set proper value
+    	/* If watering is not needed, sets program to sleep
+    	 * Unobvious forth state Sleep */
+        HAL_Delay(DELAY_AFTER_LOOP); // set proper value
 }
 
+
+/* Panic state function for system work troubles */
 static void Panic(struct State * state)
 {
+	/* Flashing LED for certain time,
+	 * Set up Watering state and try to make watering */
 	Flash_LED();
 	state->next = Watering;
 }
 
+/* Function for pure watering.
+ * Watering state function it's something like watering handler,
+ * while Humidify responsible for watering only */
 static void Humidify(void)
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
@@ -610,22 +597,23 @@ static void Humidify(void)
 
 }
 
-
+/* Flashing red LEDs for take user attention to system usage problem */
 static void Flash_LED(void)
 {
 	int repeat = 0;
 
-	while(repeat++ < 5)
-	{ //set repeat <= 3600 (every hour)
+	while(repeat++ < 3600) //3600 (every hour)
+	{
 		HAL_GPIO_TogglePin (GPIOE, LD3_Pin);
 		HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
-		HAL_Delay(500);
+		HAL_Delay(ALARM_LIGHTS_DELAY);
 		HAL_GPIO_TogglePin (GPIOE, LD3_Pin);
 		HAL_GPIO_TogglePin (GPIOE, LD10_Pin);
-		HAL_Delay(500);
+		HAL_Delay(ALARM_LIGHTS_DELAY);
 	}
 }
 
+/* Custom delay to use inside interrupt handlers */
 static void Ext_Delay(void)
 {
 	int c;
@@ -633,6 +621,7 @@ static void Ext_Delay(void)
 	{}
 }
 
+/* Handle user button interrupt */
 void EXTI0_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI0_IRQn 0 */
@@ -640,6 +629,7 @@ void EXTI0_IRQHandler(void)
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   /* USER CODE BEGIN EXTI0_IRQn 1 */
   current_mode = (current_mode + 1) % 4;
+  /* Visualize mode changing by blinking LEDs */
   switch(current_mode)
   {
   case LOW:
